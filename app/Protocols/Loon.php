@@ -2,6 +2,8 @@
 
 namespace App\Protocols;
 
+use App\Utils\Helper;
+
 class Loon
 {
     public $flag = 'loon';
@@ -23,14 +25,7 @@ class Loon
         header("Subscription-Userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
 
         foreach ($servers as $item) {
-            if ($item['type'] === 'shadowsocks'
-                && in_array($item['cipher'], [
-                    'aes-128-gcm',
-                    'aes-192-gcm',
-                    'aes-256-gcm',
-                    'chacha20-ietf-poly1305'
-                ])
-            ) {
+            if ($item['type'] === 'shadowsocks') {
                 $uri .= self::buildShadowsocks($user['uuid'], $item);
             }elseif ($item['type'] === 'vmess') {
                 $uri .= self::buildVmess($user['uuid'], $item);
@@ -48,6 +43,15 @@ class Loon
 
     public static function buildShadowsocks($password, $server)
     {
+        if ($server['cipher'] === '2022-blake3-aes-128-gcm') {
+            $serverKey = Helper::getServerKey($server['created_at'], 16);
+            $userKey = Helper::uuidToBase64($password, 16);
+            $password = "{$serverKey}:{$userKey}";
+        } elseif ($server['cipher'] === '2022-blake3-aes-256-gcm') {
+            $serverKey = Helper::getServerKey($server['created_at'], 32);
+            $userKey = Helper::uuidToBase64($password, 32);
+            $password = "{$serverKey}:{$userKey}";
+        }
         $config = [
             "{$server['name']}=Shadowsocks",
             "{$server['host']}",
@@ -69,7 +73,7 @@ class Loon
             "{$server['name']}=vmess",
             "{$server['host']}",
             "{$server['port']}",
-            'auto',
+            $server['networkSettings']['security'] ?? 'auto',
             "{$uuid}",
             'fast-open=false',
             'udp=true',
@@ -217,8 +221,7 @@ class Loon
             "password={$password}",
             "download-bandwidth={$server['up_mbps']}",
             $server['server_name'] ? "sni={$server['server_name']}" : "",
-            // 'tfo=true', 
-            'udp-relay=true'
+            'udp=true'
         ];
         if (!empty($server['insecure'])) {
             array_push($config, $server['insecure'] ? 'skip-cert-verify=true' : 'skip-cert-verify=false');

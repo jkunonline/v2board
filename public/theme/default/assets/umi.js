@@ -16015,7 +16015,7 @@
                     }
                 }, Object(m["formatMessage"])({
                     id: "\u81ea\u52a8\u7eed\u8d39"
-                }), l.a.createElement(i["a"], {
+                }), " ", l.a.createElement(i["a"], {
                     loading: this.props.user.auto_renewal_loading,
                     checked: t.auto_renewal,
                     onChange: e=>this.update("auto_renewal", e ? 1 : 0)
@@ -16206,7 +16206,9 @@
                 }, l.a.createElement("div", {
                     className: "alert alert-warning mb-3",
                     role: "alert"
-                }, "\u5f53\u4f60\u7684\u8ba2\u9605\u5730\u5740\u6216\u8d26\u6237\u53d1\u751f\u6cc4\u6f0f\u88ab\u4ed6\u4eba\u6ee5\u7528\u65f6\uff0c\u53ef\u4ee5\u5728\u6b64\u91cd\u7f6e\u8ba2\u9605\u4fe1\u606f\u3002\u907f\u514d\u5e26\u6765\u4e0d\u5fc5\u8981\u7684\u635f\u5931\u3002"), l.a.createElement(a["a"], {
+                }, Object(m["formatMessage"])({
+                    id: "\u91cd\u7f6e\u8ba2\u9605\u63d0\u793a\u4fe1\u606f"
+                })), l.a.createElement(a["a"], {
                     type: "danger",
                     onClick: ()=>this.resetSecurity()
                 }, Object(m["formatMessage"])({
@@ -17192,7 +17194,7 @@
           , u = s.host
           , l = document.createElement("link");
         if (l.rel = "stylesheet",
-        l.href = u ? "./theme/".concat(c.color, ".css") : "./theme/default/assets/theme/".concat(c.color, ".css"),
+        l.href = u ? "./theme/".concat(c.color, ".css") : "/theme/default/assets/theme/".concat(c.color, ".css"),
         document.getElementsByTagName("head")[0].appendChild(l),
         Object(i["e"])("i18n"))
             Object(o["setLocale"])(Object(i["e"])("i18n"));
@@ -52825,11 +52827,11 @@
                         }), Object(w["formatMessage"])({
                             id: "\u5df2\u5173\u95ed"
                         })) : m.a.createElement("span", null, m.a.createElement(f["a"], {
-                            status: parseInt(e) ? "error" : "processing"
+                            status: parseInt(e) ? "processing" : "error"
                         }), parseInt(e) ? Object(w["formatMessage"])({
-                            id: "\u5f85\u56de\u590d"
+                            id: "\u5df2\u7b54\u590d"
                         }) : Object(w["formatMessage"])({
-                            id: "\u5df2\u56de\u590d"
+                            id: "\u5f85\u5904\u7406"
                         }))
                     }
                 }, {
