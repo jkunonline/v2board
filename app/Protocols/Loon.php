@@ -25,6 +25,9 @@ class Loon
         header("Subscription-Userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
 
         foreach ($servers as $item) {
+            if (($item['type'] ?? null) === 'v2node' && isset($item['protocol'])) {
+                $item['type'] = $item['protocol'];
+            }
             if ($item['type'] === 'shadowsocks') {
                 $uri .= self::buildShadowsocks($user['uuid'], $item);
             }elseif ($item['type'] === 'vmess') {
@@ -54,26 +57,37 @@ class Loon
         }
         $config = [
             "{$server['name']}=Shadowsocks",
-            "{$server['host']}",
-            "{$server['port']}",
-            "{$server['cipher']}",
-            "{$password}",
-            'fast-open=false',
-            'udp=true'
         ];
-        $config = array_filter($config);
+        $config[] = $server['host'];
+        $config[] = $server['port'];
+        $config[] = $server['cipher'];
+        $config[] = $password;
+
+        if (isset($server['obfs']) && $server['obfs'] === 'http') {
+            $config[] = "obfs-name={$server['obfs']}";
+            if (isset($server['obfs-host']) && !empty($server['obfs-host'])) {
+                $config[] = "obfs-host={$server['obfs-host']}";
+            }
+            if (isset($server['obfs-path'])) {
+                $config[] = "obfs-uri={$server['obfs-path']}";
+            }
+        }
+        $config[] = 'fast-open=false';
+        $config[] = 'udp=true';
         $uri = implode(',', $config);
         $uri .= "\r\n";
+
         return $uri;
     }
 
     public static function buildVmess($uuid, $server)
     {
+        $networkSettings = $server['networkSettings'] ?? [];
         $config = [
             "{$server['name']}=vmess",
             "{$server['host']}",
             "{$server['port']}",
-            $server['networkSettings']['security'] ?? 'auto',
+            $networkSettings['security'] ?? 'auto',
             "{$uuid}",
             'fast-open=false',
             'udp=true',
@@ -144,12 +158,13 @@ class Loon
         }
         if ($server['tls'] === 1) {
             array_push($config, 'over-tls=true');
+            array_push($config, "flow={$server['flow']}");
             if ($server['network'] === 'tcp')
                 
             if ($server['tls_settings']) {
                 $tlsSettings = $server['tls_settings'];
-                if (isset($tlsSettings['allow_insecure']) && !empty($tlsSettings['allow_insecure']))
-                    array_push($config, 'skip-cert-verify=' . ($tlsSettings['allow_insecure'] ? 'true' : 'false'));
+                if (!empty($tlsSettings['allow_insecure'] ?? 0))
+                    array_push($config, 'skip-cert-verify=true');
                 if (isset($tlsSettings['server_name']) && !empty($tlsSettings['server_name']))
                     array_push($config, "tls-name={$tlsSettings['server_name']}");
             }
@@ -163,8 +178,8 @@ class Loon
                     array_push($config, "short-id={$tlsSettings['short_id']}");
                 if (isset($tlsSettings['server_name']) && !empty($tlsSettings['server_name']))
                     array_push($config, "sni={$tlsSettings['server_name']}");
-                if (isset($tlsSettings['allow_insecure']) && !empty($tlsSettings['allow_insecure']))
-                    array_push($config, 'skip-cert-verify=' . ($tlsSettings['allow_insecure']? 'true' : 'false'));
+                if (!empty($tlsSettings['allow_insecure'] ?? 0))
+                    array_push($config, 'skip-cert-verify=true');
             }
         }
         if ($server['network'] === 'ws') {
@@ -236,6 +251,9 @@ class Loon
         ];
         if (!empty($server['insecure'])) {
             array_push($config, $server['insecure'] ? 'skip-cert-verify=true' : 'skip-cert-verify=false');
+        }
+        if (isset($server['obfs'])){
+            array_push($config, 'salamander-password=' . $server['obfs_password']);
         }
         $config = array_filter($config);
         $uri = implode(',', $config);

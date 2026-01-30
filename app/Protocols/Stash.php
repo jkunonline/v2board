@@ -2,6 +2,7 @@
 
 namespace App\Protocols;
 
+use App\Utils\Helper;
 use Symfony\Component\Yaml\Yaml;
 
 class Stash
@@ -36,6 +37,9 @@ class Stash
         $proxies = [];
 
         foreach ($servers as $item) {
+            if (($item['type'] ?? null) === 'v2node' && isset($item['protocol'])) {
+                $item['type'] = $item['protocol'];
+            }
             if ($item['type'] === 'shadowsocks') {
                 array_push($proxy, self::buildShadowsocks($user['uuid'], $item));
                 array_push($proxies, $item['name']);
@@ -50,6 +54,10 @@ class Stash
             }
             if ($item['type'] === 'trojan') {
                 array_push($proxy, self::buildTrojan($user['uuid'], $item));
+                array_push($proxies, $item['name']);
+            }
+            if ($item['type'] === 'tuic') {
+                array_push($proxy, self::buildTuic($user['uuid'], $item));
                 array_push($proxies, $item['name']);
             }
             if ($item['type'] === 'hysteria') {
@@ -110,6 +118,16 @@ class Stash
         $array['cipher'] = $server['cipher'];
         $array['password'] = $password;
         $array['udp'] = true;
+        if (isset($server['obfs']) && $server['obfs'] === 'http') {
+            $array['plugin'] = 'obfs';
+            $plugin_opts = [
+                'mode' => 'http',
+            ];
+            if (isset($server['obfs-host']) && !empty($server['obfs-host'])) {
+                $plugin_opts['host'] = $server['obfs-host'];
+            }
+            $array['plugin-opts'] = $plugin_opts;
+        }
         return $array;
     }
 
@@ -140,7 +158,6 @@ class Stash
             if (isset($tcpSettings['header']['type']) && $tcpSettings['header']['type'] == 'http') {
                 $array['network'] = $tcpSettings['header']['type'];
                 if (isset($tcpSettings['header']['request']['headers']['Host'])) $array['http-opts']['headers']['Host'] = $tcpSettings['header']['request']['headers']['Host'];
-                if (isset($tcpSettings['header']['request']['path'][0])) $array['http-opts']['path'] = $tcpSettings['header']['request']['path'][0];
             }
         }
         if ($server['network'] === 'ws') {
@@ -195,7 +212,7 @@ class Stash
                    $array['reality-opts']['public-key'] = $tlsSettings['public_key'];
                    $array['reality-opts']['short-id'] = $tlsSettings['short_id'];
                 }
-                $array['skip-cert-verify'] = $tlsSettings['allow_insecure'] ? true : false;
+                $array['skip-cert-verify'] = ($tlsSettings['allow_insecure'] ?? 0) == 1 ? true : false;
                 $array['client-fingerprint'] = $tlsSettings['fingerprint'] ?? null;
             }
         }
@@ -266,6 +283,30 @@ class Stash
         return $array;
     }
 
+    public static function buildTuic($password, $server)
+    {
+        $array = [
+            'name' => $server['name'],
+            'type' => 'tuic',
+            'server' => $server['host'],
+            'port' => $server['port'],
+            'version' => 5,
+            'uuid' => $password,
+            'password' => $password,
+            'alpn' => ['h3'],
+            //'disable-sni' => $server['disable_sni'] ? true : false,
+            //'reduce-rtt' => $server['zero_rtt_handshake'] ? true : false,
+            //'udp-relay-mode' => $server['udp_relay_mode'] ?? 'native',
+            //congestion-controller' => $server['congestion_control'] ?? 'cubic',
+            'skip-cert-verify' => $server['insecure'] ? true : false,
+        ];
+        if (isset($server['server_name'])) {
+            $array['sni'] = $server['server_name'];
+        }
+
+        return $array;
+    }
+
     public static function buildHysteria($password, $server)
     {
         $array = [];
@@ -314,7 +355,7 @@ class Stash
 
     private function isRegex($exp)
     {
-        return @preg_match($exp, null) !== false;
+        return @preg_match($exp, '') !== false;
     }
 
     private function isMatch($exp, $str)

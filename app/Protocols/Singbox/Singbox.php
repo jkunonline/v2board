@@ -47,25 +47,42 @@ class Singbox
         $proxies = [];
     
         foreach ($this->servers as $item) {
-            if ($item['type'] === 'shadowsocks') {
-                $ssConfig = $this->buildShadowsocks($this->user['uuid'], $item);
-                $proxies[] = $ssConfig;
+            if ($item['type'] === 'v2node') {
+                $item['type'] = $item['protocol'];
             }
-            if ($item['type'] === 'trojan') {
-                $trojanConfig = $this->buildTrojan($this->user['uuid'], $item);
-                $proxies[] = $trojanConfig;
-            }
-            if ($item['type'] === 'vmess') {
-                $vmessConfig = $this->buildVmess($this->user['uuid'], $item);
-                $proxies[] = $vmessConfig;
-            }
-            if ($item['type'] === 'vless') {
-                $vlessConfig = $this->buildVless($this->user['uuid'], $item);
-                $proxies[] = $vlessConfig;
-            }
-            if ($item['type'] === 'hysteria') {
-                $hysteriaConfig = $this->buildHysteria($this->user['uuid'], $item, $this->user);
-                $proxies[] = $hysteriaConfig;
+            switch ($item['type']) {
+                case 'shadowsocks':
+                    $ssConfig = $this->buildShadowsocks($this->user['uuid'], $item);
+                    $proxies[] = $ssConfig;
+                    break;
+                case 'trojan':
+                    $trojanConfig = $this->buildTrojan($this->user['uuid'], $item);
+                    $proxies[] = $trojanConfig;
+                    break;
+                case 'vmess':
+                    $vmessConfig = $this->buildVmess($this->user['uuid'], $item);
+                    $proxies[] = $vmessConfig;
+                    break;
+                case 'vless':
+                    $vlessConfig = $this->buildVless($this->user['uuid'], $item);
+                    $proxies[] = $vlessConfig;
+                    break;
+                case 'tuic':
+                    $tuicConfig = $this->buildTuic($this->user['uuid'], $item);
+                    $proxies[] = $tuicConfig;
+                    break;
+                case 'anytls':
+                    $anytlsConfig = $this->buildAnyTLS($this->user['uuid'], $item);
+                    $proxies[] = $anytlsConfig;
+                    break;
+                case 'hysteria':
+                    $hysteriaConfig = $this->buildHysteria($this->user['uuid'], $item, $this->user);
+                    $proxies[] = $hysteriaConfig;
+                    break;
+                case 'hysteria2':
+                    $hysteria2Config = $this->buildHysteria2($this->user['uuid'], $item);
+                    $proxies[] = $hysteria2Config;
+                    break;
             }
         }
     
@@ -100,7 +117,27 @@ class Singbox
         $array['method'] = $server['cipher'];
         $array['password'] = $password;
         $array['domain_resolver'] = 'local';
+        if (isset($server['obfs']) && $server['obfs'] === 'http') {
+            $array['plugin'] = 'obfs-local';
+            $plugin_opts_parts = [];
+            $plugin_opts_parts[] = "obfs=" . $server['obfs'];
+            if (isset($server['obfs-host'])) {
+                $plugin_opts_parts[] = "obfs-host=" . $server['obfs-host'];
+            }
+            if (isset($server['obfs-path'])) {
+                $plugin_opts_parts[] = "path=" . $server['obfs-path'];
+            }
+            $array['plugin_opts'] = implode(';', $plugin_opts_parts);
+        } else if ((($server['network'] ?? null) == 'http') && isset($server['network_settings']['Host'])) {
+            $array['plugin'] = 'obfs-local';
+            $plugin_opts_parts = [];
+            $plugin_opts_parts[] = "obfs=http";
+            $networkSettings = $server['network_settings'];
+            $plugin_opts_parts[] = "obfs-host=" . $networkSettings['Host'];
+            $plugin_opts_parts[] = "path=" . ($networkSettings['path'] ?? '/');
 
+            $array['plugin_opts'] = implode(';', $plugin_opts_parts);
+        }
         return $array;
     }
 
@@ -121,38 +158,29 @@ class Singbox
         if ($server['tls']) {
             $tlsConfig = [];
             $tlsConfig['enabled'] = true;
-            if ($server['tlsSettings']) {
-                $tlsSettings = $server['tlsSettings'] ?? [];
-                $tlsConfig['insecure'] = $tlsSettings['allowInsecure'] ? true : false;
-                $tlsConfig['server_name'] = $tlsSettings['serverName'] ?? null;
-            }
+            $tlsSettings = $server['tls_settings'] ?? $server['tlsSettings'] ?? [];
+            $tlsConfig['insecure'] = ($tlsSettings['allow_insecure'] ?? ($tlsSettings['allowInsecure'] ?? 0)) == 1 ? true : false;
+            $tlsConfig['server_name'] = $tlsSettings['server_name'] ?? $tlsSettings['serverName'] ?? '';
             $array['tls'] = $tlsConfig;
         }
         if ($server['network'] === 'tcp') {
-            $tcpSettings = $server['networkSettings'];
+            $tcpSettings = $server['networkSettings'] ?? ($server['network_settings'] ?? []);
             if (isset($tcpSettings['header']['type']) && $tcpSettings['header']['type'] == 'http') $array['transport']['type'] = $tcpSettings['header']['type'];
             if (isset($tcpSettings['header']['request']['headers']['Host'])) $array['transport']['host'] = $tcpSettings['header']['request']['headers']['Host'];
             if (isset($tcpSettings['header']['request']['path'][0])) $array['transport']['path'] = $tcpSettings['header']['request']['path'][0];
         }
         if ($server['network'] === 'ws') {
             $array['transport']['type'] ='ws';
-            if ($server['networkSettings']) {
-                $wsSettings = $server['networkSettings'];
-                if (isset($wsSettings['path']) && !empty($wsSettings['path'])) $array['transport']['path'] = $wsSettings['path'];
-                if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host'])) $array['transport']['headers'] = ['Host' => array($wsSettings['headers']['Host'])];
-                $array['transport']['max_early_data'] = 2048;
-                $array['transport']['early_data_header_name'] = 'Sec-WebSocket-Protocol';
-                if (isset($wsSettings['security'])) {
-                    $array['security'] = $wsSettings['security'];
-                }
-            }
+            $wsSettings = $server['networkSettings'] ?? ($server['network_settings'] ?? []);
+            $array['transport']['path'] = $wsSettings['path'] ?? '/';
+            if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host'])) $array['transport']['headers'] = ['Host' => array($wsSettings['headers']['Host'])];
+            $array['transport']['max_early_data'] = 2048;
+            $array['transport']['early_data_header_name'] = 'Sec-WebSocket-Protocol';
         }
         if ($server['network'] === 'grpc') {
             $array['transport']['type'] ='grpc';
-            if ($server['networkSettings']) {
-                $grpcSettings = $server['networkSettings'];
-                if (isset($grpcSettings['serviceName'])) $array['transport']['service_name'] = $grpcSettings['serviceName'];
-            }
+            $grpcSettings = $server['networkSettings'] ?? ($server['network_settings'] ?? []);
+            if (isset($grpcSettings['serviceName'])) $array['transport']['service_name'] = $grpcSettings['serviceName'];
         }
 
         return $array;
@@ -178,7 +206,7 @@ class Singbox
             $array['flow'] = !empty($server['flow']) ? $server['flow'] : "";
             $tlsSettings = $server['tls_settings'] ?? [];
             if ($server['tls_settings']) {
-                $tlsConfig['insecure'] = isset($tlsSettings['allow_insecure']) && $tlsSettings['allow_insecure'] == 1 ? true : false;
+                $tlsConfig['insecure'] = ($tlsSettings['allow_insecure'] ?? 0) == 1 ? true : false;
                 $tlsConfig['server_name'] = $tlsSettings['server_name'] ?? null;
                 if ($server['tls'] == 2) {
                     $tlsConfig['reality'] = [
@@ -187,7 +215,7 @@ class Singbox
                         'short_id' => $tlsSettings['short_id']
                     ];
                 }
-                $fingerprints = isset($server['tls_settings']['fingerprint']) ? $server['tls_settings']['fingerprint'] : 'chrome';
+                $fingerprints = $tlsSettings['fingerprint'] ?? 'chrome';
                 $tlsConfig['utls'] = [
                     "enabled" => true,
                     "fingerprint" => $fingerprints
@@ -233,10 +261,11 @@ class Singbox
         $array['password'] = $password;
         $array['domain_resolver'] = 'local';
 
+        $tlsSettings = $server['tls_settings'] ?? [];
         $array['tls'] = [
             'enabled' => true,
-            'insecure' => $server['allow_insecure'] ? true : false,
-            'server_name' => $server['server_name']
+            'insecure' => ($server['allow_insecure'] ?? ($tlsSettings['allow_insecure'] ?? 0)) == 1 ? true : false,
+            'server_name' => $server['server_name'] ?? ($tlsSettings['server_name'] ?? '')
         ];
 
         if(isset($server['network']) && in_array($server['network'], ["grpc", "ws"])){
@@ -248,7 +277,7 @@ class Singbox
             // ws配置
             if($server['network'] === "ws") {
                 if(isset($server['network_settings']['path'])) {
-                    $array['transport']['path'] = $server['network_settings']['path'];
+                    $array['transport']['path'] = $server['network_settings']['path'] ?? '/';
                 }
                 if(isset($server['network_settings']['headers']['Host'])){
                     $array['transport']['headers'] = ['Host' => array($server['network_settings']['headers']['Host'])];
@@ -258,6 +287,55 @@ class Singbox
             }
         };
 
+        return $array;
+    }
+
+    protected function buildTuic($password, $server)
+    {
+        $array = [];
+        $array['tag'] = $server['name'];
+        $array['type'] = 'tuic';
+        $array['server'] = $server['host'];
+        $array['server_port'] = $server['port'];
+        $array['uuid'] = $password;
+        $array['password'] = $password;
+        $array['congestion_control'] = $server['congestion_control'] ?? 'cubic';
+        $array['udp_relay_mode'] = $server['udp_relay_mode'] ?? 'native';
+        $array['zero_rtt_handshake'] = $server['zero_rtt_handshake'] ? true : false;
+        $array['domain_resolver'] = 'local';
+
+        $tlsSettings = $server['tls_settings'] ?? [];
+        $array['tls'] = [
+            'enabled' => true,
+            'insecure' => ($server['insecure'] ?? ($tlsSettings['allow_insecure'] ?? 0)) == 1 ? true : false,
+            'alpn' => ['h3'],
+            'disable_sni' => $server['disable_sni'] ? true : false,
+        ];
+        $array['tls']['server_name'] = $server['server_name'] ?? ($tlsSettings['server_name'] ?? '');
+
+        return $array;
+    }
+
+    protected function buildAnyTLS($password, $server)
+    {
+        $array = [];
+        $array['tag'] = $server['name'];
+        $array['type'] = 'anytls';
+        $array['server'] = $server['host'];
+        $array['server_port'] = $server['port'];
+        $array['password'] = $password;
+        $array['domain_resolver'] = 'local';
+
+        $tlsSettings = $server['tls_settings'] ?? [];
+        $array['tls'] = [
+            'enabled' => true,
+            'insecure' => ($server['insecure'] ?? ($tlsSettings['allow_insecure'] ?? 0)) == 1 ? true : false,
+            'alpn' => [
+                'h2',
+                'http/1.1',
+            ],
+        ];
+        $array['tls']['server_name'] = $server['server_name'] ?? ($tlsSettings['server_name'] ?? '');
         return $array;
     }
 
@@ -318,6 +396,37 @@ class Singbox
             }
         }
 
+        return $array;
+    }
+
+    protected function buildHysteria2($password, $server)
+    {
+        $parts = explode(",",$server['port']);
+        $firstPart = $parts[0];
+        if (strpos($firstPart, '-') !== false) {
+            $range = explode('-', $firstPart);
+            $firstPort = $range[0];
+        } else {
+            $firstPort = $firstPart;
+        }
+        $tlsSettings = $server['tls_settings'] ?? [];
+        $array = [
+            'server' => $server['host'],
+            'server_port' => (int)$firstPort,
+            'tls' => [
+                'enabled' => true,
+                'insecure' => ($tlsSettings['allow_insecure'] ?? 0) == 1 ? true : false,
+                'server_name' => $tlsSettings['server_name'] ?? ''
+            ],
+            'domain_resolver' => 'local',
+            'password' => $password,
+            'tag' => $server['name'],
+            'type' => 'hysteria2'
+        ];
+        if (isset($server['obfs'])) {
+            $array['obfs']['type'] = $server['obfs'];
+            $array['obfs']['password'] = $server['obfs_password'];
+        }
         return $array;
     }
 }

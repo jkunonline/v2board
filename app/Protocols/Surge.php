@@ -28,6 +28,9 @@ class Surge
         $proxyGroup = '';
 
         foreach ($servers as $item) {
+            if (($item['type'] ?? null) === 'v2node' && isset($item['protocol'])) {
+                $item['type'] = $item['protocol'];
+            }
             if ($item['type'] === 'shadowsocks') {
                 // [Proxy]
                 $proxies .= self::buildShadowsocks($user['uuid'], $item);
@@ -46,6 +49,11 @@ class Surge
             }elseif ($item['type'] === 'hysteria' && $item['version'] === 2) { //surge只支持hysteria2
                 // [Proxy]
                 $proxies .= self::buildHysteria($user['uuid'], $item);
+                // [Proxy Group]
+                $proxyGroup .= $item['name'] . ', ';
+            }elseif ($item['type'] === 'anytls') {
+                // [Proxy]
+                $proxies .= self::buildAnyTLS($user['uuid'], $item);
                 // [Proxy Group]
                 $proxyGroup .= $item['name'] . ', ';
             }
@@ -79,7 +87,6 @@ class Surge
         return $config;
     }
 
-
     public static function buildShadowsocks($password, $server)
     {
         if ($server['cipher'] === '2022-blake3-aes-128-gcm') {
@@ -93,16 +100,26 @@ class Surge
         }
         $config = [
             "{$server['name']}=ss",
-            "{$server['host']}",
-            "{$server['port']}",
-            "encrypt-method={$server['cipher']}",
-            "password={$password}",
-            'tfo=true',
-            'udp-relay=true'
         ];
-        $config = array_filter($config);
+        $config[] = $server['host'];
+        $config[] = $server['port'];
+        $config[] = "encrypt-method={$server['cipher']}";
+        $config[] = "password={$password}";
+
+        if (isset($server['obfs']) && $server['obfs'] === 'http') {
+            $config[] = "obfs={$server['obfs']}";
+            if (isset($server['obfs-host']) && !empty($server['obfs-host'])) {
+                $config[] = "obfs-host={$server['obfs-host']}";
+            }
+            if (isset($server['obfs-path'])) {
+                $config[] = "obfs-uri={$server['obfs-path']}";
+            }
+        }
+        $config[] = 'fast-open=false';
+        $config[] = 'udp=true';
         $uri = implode(',', $config);
         $uri .= "\r\n";
+
         return $uri;
     }
 
@@ -171,6 +188,26 @@ class Surge
             }
         }
         $config = array_filter($config);
+        $uri = implode(',', $config);
+        $uri .= "\r\n";
+        return $uri;
+    }
+
+    public static function buildAnyTLS($password, $server)
+    {
+        $config = [
+            "{$server['name']}=anytls",
+            "{$server['host']}",
+            "{$server['port']}",
+            "password={$password}",
+            'tfo=true',
+        ];
+        if (!empty($server['allow_insecure'])) {
+            array_push($config, 'skip-cert-verify=true');
+        }
+        if (!empty($server['server_name'])) {
+            array_push($config, "sni={$server['server_name']}");
+        }
         $uri = implode(',', $config);
         $uri .= "\r\n";
         return $uri;

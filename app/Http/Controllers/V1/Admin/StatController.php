@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\CommissionLog;
 use App\Models\Order;
 use App\Models\ServerHysteria;
+use App\Models\ServerTuic;
 use App\Models\ServerShadowsocks;
 use App\Models\ServerTrojan;
 use App\Models\ServerVmess;
 use App\Models\ServerVless;
+use App\Models\ServerAnytls;
+use App\Models\ServerV2node;
 use App\Models\Stat;
 use App\Models\StatServer;
 use App\Models\StatUser;
@@ -31,6 +34,9 @@ class StatController extends Controller
                     ->whereNotIn('status', [0, 2])
                     ->sum('total_amount'),
                 'month_register_total' => User::where('created_at', '>=', strtotime(date('Y-m-1')))
+                    ->where('created_at', '<', time())
+                    ->count(),
+                'day_register_total' => User::where('created_at', '>=', strtotime(date('Y-m-d')))
                     ->where('created_at', '<', time())
                     ->count(),
                 'ticket_pending_total' => Ticket::where('status', 0)
@@ -70,6 +76,11 @@ class StatController extends Controller
         foreach ($statistics as $statistic) {
             $date = date('m-d', $statistic['record_at']);
             $result[] = [
+                'type' => '注册人数',
+                'date' => $date,
+                'value' => $statistic['register_count']
+            ];
+            $result[] = [
                 'type' => '收款金额',
                 'date' => $date,
                 'value' => $statistic['paid_total'] / 100
@@ -104,7 +115,10 @@ class StatController extends Controller
             'trojan' => ServerTrojan::where('parent_id', null)->get()->toArray(),
             'vmess' => ServerVmess::where('parent_id', null)->get()->toArray(),
             'vless' => ServerVless::where('parent_id', null)->get()->toArray(),
-            'hysteria'=> ServerHysteria::where('parent_id', null)->get()->toArray()
+            'tuic' => ServerTuic::where('parent_id', null)->get()->toArray(),
+            'hysteria'=> ServerHysteria::where('parent_id', null)->get()->toArray(),
+            'anytls' => ServerAnytls::where('parent_id', null)->get()->toArray(),
+            'v2node' => ServerV2node::where('parent_id', null)->get()->toArray()
         ];
         $startAt = strtotime('-1 day', strtotime(date('Y-m-d')));
         $endAt = strtotime(date('Y-m-d'));
@@ -144,7 +158,10 @@ class StatController extends Controller
             'trojan' => ServerTrojan::where('parent_id', null)->get()->toArray(),
             'vmess' => ServerVmess::where('parent_id', null)->get()->toArray(),
             'vless' => ServerVless::where('parent_id', null)->get()->toArray(),
-            'hysteria'=> ServerHysteria::where('parent_id', null)->get()->toArray()
+            'tuic' => ServerTuic::where('parent_id', null)->get()->toArray(),
+            'hysteria'=> ServerHysteria::where('parent_id', null)->get()->toArray(),
+            'anytls' => ServerAnytls::where('parent_id', null)->get()->toArray(),
+            'v2node' => ServerV2node::where('parent_id', null)->get()->toArray()
         ];
         $startAt = strtotime(date('Y-m-d'));
         $endAt = time();
@@ -242,7 +259,7 @@ class StatController extends Controller
             $statistics[$k]['email'] = empty($user) ? "null" : $user['email'];
             $statistics[$k]['total'] = $statistics[$k]['total'] * $statistics[$k]['server_rate'] / 1073741824;
             if (isset($idIndexMap[$id])) {
-                
+
                 $index = $idIndexMap[$id];
                 $data[$index]['total'] += $statistics[$k]['total'];
             } else {
